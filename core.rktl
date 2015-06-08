@@ -1,14 +1,27 @@
 #lang racket
 
+; Based on SICP 4.1
+
 (define (self-evaluating? exp) #t)
 (define (variable? exp) #t)
 (define (quoted? exp) #t)
 (define (assignment? exp) #t)
 (define (definition? exp) #t)
 (define (lookup-variable-value exp env) #t)
-(define text-of-quotation exp) #t)
+(define (text-of-quotation exp) #t)
 (define (eval-assignment exp env) #t)
 (define (eval-definition exp env) #t)
+(define (if? exp) #t)
+(define (eval-if exp env) #t)
+(define (lambda? exp) #t)
+(define (make-procedure foo bar env) #t)
+(define (lambda-parameters exp) #t)
+(define (lambda-body exp) #t)
+(define (begin? exp) #t)
+(define (eval-sequence foo env) #t)
+(define (begin-actions exp) #t)
+(define (cond? exp) #t)
+(define (application? exp) #t)
 
 (define (eval exp env)
   (cond ((self-evaluating? exp) exp)
@@ -44,3 +57,12 @@
           (error
             "Unknown procedure type -- APPLY" procedure))))
 
+(define (list-of-values exps env)
+  (if (no-operands? exps)
+    '()
+    (cons (eval (first-operand exps) env)
+          (list-of-values (rest-operands exps) env))))
+
+
+
+(define (cond->if foo) bar)
