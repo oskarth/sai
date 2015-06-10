@@ -1,9 +1,5 @@
 #lang racket
 
-; idea: support for map, set, vectors
-; env is a dictionary, looks it up there
-; how do I test it :(
-
 (define evlist
   (lambda (l env)
     (cond ((eq? l '()) '())
@@ -58,15 +54,6 @@
     (cons (pair-up vars vals)
           env)))
 
-(define (apply-primitive-procedure proc args))
-
-;; 
- 
-;evcond apply evlist lookup primitive
-; apply-primop bind
-; case-analysis with dispatch
-
-;; make this data-directed? means what?
 (define eval
   (lambda (exp env)
     (cond ((number? exp) exp)
