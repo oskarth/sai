@@ -59,8 +59,8 @@
   (define (env-loop env)
     (define (scan vars vals)
       (cond ((null? vals) (env-loop (enclosing-environment env)))
-            ((eq? var (car vars)) (car vals))
-            (else (scan (cdr vars) (cdr vals)))))
+            ((eq? var (mcar vars)) (mcar vals))
+            (else (scan (mcdr vars) (mcdr vals)))))
     (if (eq? env the-empty-environment)
       (error "Unbound variable" var)
       (let ((frame (first-frame env)))
@@ -78,6 +78,14 @@
       (let ((frame (first-frame env)))
         (scan (frame-variables frame) (frame-values frame)))))
   (env-loop env))
+
+(define (define-variable! var val env)
+  (let ((frame (first-frame env)))
+    (define (scan vars vals)
+      (cond ((null? vars) (add-binding-to-frame! var val frame))
+            ((eq? var (mcar vars)) (set-mcar! vals val))
+            (else (scan (mcdr vars) (mcdr vals)))))
+    (scan (frame-variables frame) (frame-values frame))))
 
 ;(define primitive-procedures
 ;  (list (list 'car car)
