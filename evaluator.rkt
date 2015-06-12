@@ -1,25 +1,37 @@
 #lang racket
 
 ; Programming is debugging. 100% REPL all the time.
+; Don't copy paste. it leads to stupid bugs.
 
 (require scheme/mpair)
 
-; eval
+(define (eval exp env)
+  (cond ((self-evaluating? exp) exp)
+        ((variable? exp) (lookup-variable-value exp env))
+        ((quoted? exp) (text-of-quotation exp))
+        ((assignment? exp) (eval-assignment exp env))
+;        ((definition? exp) (eval-definition exp env))
+        ((lambda? exp) (make-procedure (lambda-parameters exp)
+                                       (lambda-body exp)
+                                       env))
+        (else (error "NYI"))))
 
 ; apply
 
-(define (self-evaluating? exp)
-  (cond ((number? exp) true)
-        ((string? exp) true)
-        (else false)))
+;(define (self-evaluating? exp)
+;  (cond ((number? exp) true)
+;        ((string? exp) true)
+;        (else false)))
+;
+;(define (tagged-list? exp tag)
+;  (if (pair? exp)
+;    (eq? (car exp) tag)
+;    false))
 
 (define (variable? exp) (symbol? exp))
 (define (application? exp) (pair? exp)) ; later in cond-statement
-
-(define (tagged-list? exp tag)
-  (if (pair? exp)
-    (eq? (car exp) tag)
-    false))
+(define (self-evaluating? exp) (or (number? exp) (string? exp)))
+(define (tagged-list? exp tag) (and (pair? exp) (eq? (car exp) tag)))
 
 (define (quoted? exp)               (tagged-list? exp 'quote))
 (define (assignment? exp)           (tagged-list? exp 'set!))
@@ -86,6 +98,45 @@
             ((eq? var (mcar vars)) (set-mcar! vals val))
             (else (scan (mcdr vars) (mcdr vals)))))
     (scan (frame-variables frame) (frame-values frame))))
+
+(define (text-of-quotation exp) (cadr exp))
+(define (assignment-variable exp) (cadr exp))
+(define (assignment-value exp) (caddr exp))
+
+;(define (definition-variable exp)
+;  (if (symbol? (cadr exp))
+;    (cadr exp)
+;    (caadr exp)))
+;
+;(define (definition-value exp)
+;  (if (symbol? (cadr exp))
+;    (caddr exp)
+;    (make-lambda (cdadr exp)   ; formal parameters
+;                 (cddr exp)))) ; body
+
+(define (lambda-parameters exp) (cadr exp))
+(define (lambda-body exp) (cddr exp))
+(define (make-lambda parameters body) (cons 'lambda (cons parameters body)))
+
+(define (eval-assignment exp env)
+  (set-variable-value! (assignment-variable exp)
+                       (eval (assignment-value exp) env)
+                       env)
+  'ok)
+
+;(define (eval-definition exp env)
+;  (define-variable! (definition-variable exp)
+;                    (eval (definition-value exp) env)
+;                    env))
+
+; assume we have this:
+; apply-primitive-procedure proc args
+
+(define (make-procedure parameters body env) (list 'procedure parameters body env))
+(define (procedure-parameters p) (cadr p))
+(define (procedure-body p) (caddr p))
+(define (procedure-environment p) (cadddr p))
+
 
 ;(define primitive-procedures
 ;  (list (list 'car car)
