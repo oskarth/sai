@@ -3,7 +3,7 @@
 ; Programming is debugging. 100% REPL all the time.
 ; Don't copy paste. it leads to stupid bugs.
 
-;(require scheme/mpair)
+(require scheme/mpair)
 
 ; Alternatively, call (define apply-builtin apply) before defining our apply.
 (require (only-in racket/base [apply apply-builtin]))
@@ -12,14 +12,14 @@
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) (lookup-variable-value exp env))
         ((quoted? exp) (text-of-quotation exp))
-;        ((assignment? exp) (eval-assignment exp env))
+        ((assignment? exp) (eval-assignment exp env))
 ;        ((definition? exp) (eval-definition exp env))
         ((lambda? exp) (make-procedure (lambda-parameters exp)
                                        (lambda-body exp)
                                        env))
         ((application? exp)
          (apply (eval (operator exp) env)
-                (list-of-values (operands exp) env)))
+                (mlist-of-values (operands exp) env)))
         (else (error "NYI"))))
 
 (define (apply proc args)
@@ -29,40 +29,44 @@
 (define (variable? exp) (symbol? exp))
 (define (application? exp) (pair? exp)) ; later in cond-statement
 (define (self-evaluating? exp) (or (number? exp) (string? exp)))
-(define (tagged-list? exp tag) (and (pair? exp) (eq? (car exp) tag)))
+(define (tagged-mlist? exp tag) (and (pair? exp) (eq? (mcar exp) tag)))
 
-(define (quoted? exp)               (tagged-list? exp 'quote))
-(define (assignment? exp)           (tagged-list? exp 'set!))
-(define (definition? exp)           (tagged-list? exp 'define))
-(define (lambda? exp)               (tagged-list? exp 'lambda))
-(define (if? exp)                   (tagged-list? exp 'if))
-(define (begin? exp)                (tagged-list? exp 'begin))
-(define (cond? exp)                 (tagged-list? exp 'cond))
-(define (primitive-procedure? proc) (tagged-list? proc 'primitive))
-(define (compound-procedure? proc)  (tagged-list? proc 'procedure))
+; TODO: just use it everywhere? that's... omg
+; This mcons business is killing me
+; XXX: such an ugly hack, to get mcons etc predicates right.
+;(define (tagged-mlist? exp tag) (and (mpair? exp) (eq? (mcar exp) tag)))
+
+(define (quoted? exp)               (tagged-mlist? exp 'quote))
+(define (assignment? exp)           (tagged-mlist? exp 'set!))
+(define (definition? exp)           (tagged-mlist? exp 'define))
+(define (lambda? exp)               (tagged-mlist? exp 'lambda))
+(define (if? exp)                   (tagged-mlist? exp 'if))
+(define (begin? exp)                (tagged-mlist? exp 'begin))
+(define (cond? exp)                 (tagged-mlist? exp 'cond))
+(define (primitive-procedure? proc) (tagged-mlist? proc 'primitive))
+(define (compound-procedure? proc)  (tagged-mlist? proc 'procedure))
 
 ; operations on environments
 ;
 ; this is an env, first-frame and enclosing environment
-; (cons (cons (mcons 'a (mcons 'b '())) (mcons 1 (mcons 2 '()))) '())
-; (define e0 (extend-environment (list 'a 'b) (list 1 2) the-empty-environment))
+; (mcons (mcons (mcons 'a (mcons 'b '())) (mcons 1 (mcons 2 '()))) '())
+; (define e0 (extend-environment (mlist 'a 'b) (mlist 1 2) the-empty-environment))
 ;
-(define (enclosing-environment env)    (cdr env))
-(define (first-frame env)             (car env))
+(define (enclosing-environment env)    (mcdr env))
+(define (first-frame env)             (mcar env))
 (define the-empty-environment         '())
-(define (make-frame variables values) (cons variables values))
-(define (frame-variables frame)       (car frame))
-(define (frame-values frame)          (cdr frame))
+(define (make-frame variables values) (mcons variables values))
+(define (frame-variables frame)       (mcar frame))
+(define (frame-values frame)          (mcdr frame))
 
-; this is the problem, so we comment it out!
-;(define (add-binding-to-frame! var val frame)
-;  (set-car! frame (cons var (car frame)))
-;  (set-cdr! frame (cons val (cdr frame))))
+(define (add-binding-to-frame! var val frame)
+  (set-mcar! frame (mcons var (mcar frame)))
+  (set-mcdr! frame (mcons val (mcdr frame))))
 
 (define (extend-environment vars vals base-env)
-  (if (= (length vars) (length vals))
-    (cons (make-frame vars vals) base-env)
-    (if (< (length vars) (length vals))
+  (if (= (mlength vars) (mlength vals))
+    (mcons (make-frame vars vals) base-env)
+    (if (< (mlength vars) (mlength vals))
       (error "Too many arguments supplied")
       (error "Too few arguments supplied"))))
 
@@ -70,34 +74,34 @@
   (define (env-loop env)
     (define (scan vars vals)
       (cond ((null? vals) (env-loop (enclosing-environment env)))
-            ((eq? var (car vars)) (car vals))
-            (else (scan (cdr vars) (cdr vals)))))
+            ((eq? var (mcar vars)) (mcar vals))
+            (else (scan (mcdr vars) (mcdr vals)))))
     (if (eq? env the-empty-environment)
       (error "Unbound variable" var)
       (let ((frame (first-frame env)))
         (scan (frame-variables frame) (frame-values frame)))))
   (env-loop env))
 
-;(define (set-variable-value! var val env)
-;  (define (env-loop env)
-;    (define (scan vars vals)
-;      (cond ((null? vals) (env-loop (enclosing-environment env)))
-;            ((eq? var (car vars)) (set-car! vals val))
-;            (else (scan (cdr vars) (cdr vals)))))
-;    (if (eq? env the-empty-environment)
-;      (error "Unbound variable -- SET!" var)
-;      (let ((frame (first-frame env)))
-;        (scan (frame-variables frame) (frame-values frame)))))
-;  (env-loop env))
+(define (set-variable-value! var val env)
+  (define (env-loop env)
+    (define (scan vars vals)
+      (cond ((null? vals) (env-loop (enclosing-environment env)))
+            ((eq? var (mcar vars)) (set-mcar! vals val))
+            (else (scan (mcdr vars) (mcdr vals)))))
+    (if (eq? env the-empty-environment)
+      (error "Unbound variable -- SET!" var)
+      (let ((frame (first-frame env)))
+        (scan (frame-variables frame) (frame-values frame)))))
+  (env-loop env))
 
-;(define (define-variable! var val env)
-;  (let ((frame (first-frame env)))
-;    (define (scan vars vals)
-;      (cond ((null? vars) (add-binding-to-frame! var val frame))
-;            ((eq? var (car vars)) (set-car! vals val))
-;            (else (scan (cdr vars) (cdr vals)))))
-;    (scan (frame-variables frame) (frame-values frame))))
-;
+(define (define-variable! var val env)
+  (let ((frame (first-frame env)))
+    (define (scan vars vals)
+      (cond ((null? vars) (add-binding-to-frame! var val frame))
+            ((eq? var (mcar vars)) (set-mcar! vals val))
+            (else (scan (mcdr vars) (mcdr vals)))))
+    (scan (frame-variables frame) (frame-values frame))))
+
 (define (text-of-quotation exp) (cadr exp))
 (define (assignment-variable exp) (cadr exp))
 (define (assignment-value exp) (caddr exp))
@@ -115,32 +119,32 @@
 
 (define (lambda-parameters exp) (cadr exp))
 (define (lambda-body exp) (cddr exp))
-(define (make-lambda parameters body) (cons 'lambda (cons parameters body)))
+(define (make-lambda parameters body) (mcons 'lambda (cons parameters body)))
 
-;(define (eval-assignment exp env)
-;  (set-variable-value! (assignment-variable exp)
-;                       (eval (assignment-value exp) env)
-;                       env)
-;  'ok)
+(define (eval-assignment exp env)
+  (set-variable-value! (assignment-variable exp)
+                       (eval (assignment-value exp) env)
+                       env)
+  'ok)
 
 ;(define (eval-definition exp env)
 ;  (define-variable! (definition-variable exp)
 ;                    (eval (definition-value exp) env)
 ;                    env))
 
-(define (operator exp) (car exp))
-(define (operands exp) (cdr exp))
+(define (operator exp) (mcar exp))
+(define (operands exp) (mcdr exp))
 (define (no-operands? ops) (null? ops))
-(define (first-operand ops) (car ops))
-(define (rest-operands ops) (cdr ops))
+(define (first-operand ops) (mcar ops))
+(define (rest-operands ops) (mcdr ops))
 
-(define (list-of-values exps env)
+(define (mlist-of-values exps env)
   (if (no-operands? exps)
     '()
-    (cons (eval (first-operand exps) env)
-          (list-of-values (rest-operands exps) env))))
+    (mcons (eval (first-operand exps) env)
+          (mlist-of-values (rest-operands exps) env))))
 
-(define (make-procedure parameters body env) (list 'procedure parameters body env))
+(define (make-procedure parameters body env) (mlist 'procedure parameters body env))
 (define (procedure-parameters p) (cadr p))
 (define (procedure-body p) (caddr p))
 (define (procedure-environment p) (cadddr p))
@@ -152,22 +156,22 @@
 
 ; do we not need +?
 (define primitive-procedures
-  (list (list 'car car)
-         (list 'cdr cdr)
-         (list 'cons cons)
-         (list 'null? null?)
-         (list '+ +)
+  (mlist (mlist 'mcar car)
+         (mlist 'mcdr cdr)
+         (mlist 'mcons cons)
+         (mlist 'null? null?)
+         (mlist '+ +)
          ;; more
          ))
 
 ; this is gettting seriously annoying, surel we can coerce at just a few points?
 ; not everything is mutable, just...the environment :<
-(define (mcadr x) (car (cdr x)))
+(define (mcadr x) (mcar (mcdr x)))
 
-(define (primitive-procedure-names) (map car primitive-procedures))
+(define (primitive-procedure-names) (mmap mcar primitive-procedures))
 
 (define (primitive-procedure-objects)
-  (map (lambda (proc) (list 'primitive (mcadr proc)))
+  (mmap (lambda (proc) (mlist 'primitive (mcadr proc)))
        primitive-procedures))
 
 (define (setup-environment)
@@ -175,8 +179,8 @@
           (extend-environment (primitive-procedure-names)
                               (primitive-procedure-objects)
                               the-empty-environment)))
-;    (define-variable! 'true true initial-env)
-;    (define-variable! 'false false initial-env)
+    (define-variable! 'true true initial-env)
+    (define-variable! 'false false initial-env)
     initial-env))
 
 (define the-global-environment (setup-environment))
@@ -189,7 +193,7 @@
 
 (define (user-print object)
   (if (compound-procedure? object)
-    (display (list 'compound-procedure
+    (display (mlist 'compound-procedure
                    (procedure-parameters object)
                    (procedure-body object)
                    '<procedure-env>))
