@@ -31,6 +31,11 @@
 (define (self-evaluating? exp) (or (number? exp) (string? exp)))
 (define (tagged-list? exp tag) (and (pair? exp) (eq? (car exp) tag)))
 
+; TODO: just use it everywhere? that's... omg
+; This mcons business is killing me
+; XXX: such an ugly hack, to get mcons etc predicates right.
+(define (tagged-mlist? exp tag) (and (mpair? exp) (eq? (mcar exp) tag)))
+
 (define (quoted? exp)               (tagged-list? exp 'quote))
 (define (assignment? exp)           (tagged-list? exp 'set!))
 (define (definition? exp)           (tagged-list? exp 'define))
@@ -38,7 +43,7 @@
 (define (if? exp)                   (tagged-list? exp 'if))
 (define (begin? exp)                (tagged-list? exp 'begin))
 (define (cond? exp)                 (tagged-list? exp 'cond))
-(define (primitive-procedure? proc) (tagged-list? proc 'primitive))
+(define (primitive-procedure? proc) (tagged-mlist? proc 'primitive))
 (define (compound-procedure? proc)  (tagged-list? proc 'procedure))
 
 ; operations on environments
