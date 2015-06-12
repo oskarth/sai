@@ -1,8 +1,5 @@
 #lang racket
 
-; Programming is debugging. 100% REPL all the time.
-; Don't copy paste. it leads to stupid bugs.
-
 (require (only-in racket/base [apply apply-builtin]))
 
 (define (eval exp env)
@@ -143,71 +140,3 @@
       (announce-output output-prompt)
       (user-print output)))
   (driver-loop))
-
-
-
-; NYI
-
-; in eval:
-;        ((assignment? exp) (eval-assignment exp env))
-;        ((definition? exp) (eval-definition exp env))
-
-; mutable cons cells etc, setup-env
-;    (define-variable! 'true true initial-env)
-;    (define-variable! 'false false initial-env)
-
-;(define (add-binding-to-frame! var val frame)
-;  (set-car! frame (cons var (car frame)))
-;  (set-cdr! frame (cons val (cdr frame))))
-
-;(define (eval-assignment exp env)
-;  (set-variable-value! (assignment-variable exp)
-;                       (eval (assignment-value exp) env)
-;                       env)
-;  'ok)
-
-;(define (eval-definition exp env)
-;  (define-variable! (definition-variable exp)
-;                    (eval (definition-value exp) env)
-;                    env))
-
-;(define (set-variable-value! var val env)
-;  (define (env-loop env)
-;    (define (scan vars vals)
-;      (cond ((null? vals) (env-loop (enclosing-environment env)))
-;            ((eq? var (car vars)) (set-car! vals val))
-;            (else (scan (cdr vars) (cdr vals)))))
-;    (if (eq? env the-empty-environment)
-;      (error "Unbound variable -- SET!" var)
-;      (let ((frame (first-frame env)))
-;        (scan (frame-variables frame) (frame-values frame)))))
-;  (env-loop env))
-
-;(define (define-variable! var val env)
-;  (let ((frame (first-frame env)))
-;    (define (scan vars vals)
-;      (cond ((null? vars) (add-binding-to-frame! var val frame))
-;            ((eq? var (car vars)) (set-car! vals val))
-;            (else (scan (cdr vars) (cdr vals)))))
-;    (scan (frame-variables frame) (frame-values frame))))
-;
-
-;(define (definition-variable exp)
-;  (if (symbol? (cadr exp))
-;    (cadr exp)
-;    (caadr exp)))
-;
-;(define (definition-value exp)
-;  (if (symbol? (cadr exp))
-;    (caddr exp)
-;    (make-lambda (cdadr exp)   ; formal parameters
-;                 (cddr exp)))) ; body
-;
-
-;eval-assignment exp env
-;eval-definition exp env
-;eval-if exp env
-;eval-sequence foo bar
-;begin-actions exp
-;cond->if exp
-
