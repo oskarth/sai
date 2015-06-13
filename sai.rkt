@@ -2,9 +2,8 @@
 
 (require (only-in racket/base [apply apply-builtin]))
 
-; this is our only mutable piece of code. It holds a mapping between vars and
-; values, such as function definitions. There's only one namespace.
-(define *ht* (make-hash))
+; Mapping between vars and values, such as function definitions.
+(define *vars* (make-hash))
 
 (define (eval exp env)
   (cond ((self-evaluating? exp) exp)
@@ -12,21 +11,18 @@
         ((quoted? exp) (cadr exp))
         ((definition? exp) (eval-definition exp env))
         ((if? exp) (eval-if exp env))
-        ((lambda? exp) (make-procedure (cadr exp) (cddr exp) env))
-        ((begin? exp)
-         (eval-sequence (begin-actions exp) env))
+        ((lambda? exp) (list 'procedure (cadr exp) (cddr exp) env))
+        ((begin? exp) (eval-sequence (cdr exp) env))
         ((cond? exp) (eval (cond->if exp) env))
         ((application? exp)
-         (apply (eval (car exp) env)
-                (list-of-values (cdr exp) env)))
+         (apply (eval (car exp) env) (list-of-values (cdr exp) env)))
         (else (error "NYI"))))
 
 (define (apply proc args)
   (cond ((primitive-procedure? proc) (apply-primitive-procedure proc args))
         ((compound-procedure? proc)
-         (eval-sequence
-           (caddr proc)
-           (extend-environment (cadr proc) args (cadddr proc))))
+         (eval-sequence (caddr proc)
+                        (extend-environment (cadr proc) args (cadddr proc))))
         (else (error "Unknown procedure type -- APPLY" proc))))
 
 (define (variable? exp)             (symbol? exp))
@@ -35,6 +31,7 @@
 (define (tagged-list? exp tag)      (and (pair? exp) (eq? (car exp) tag)))
 (define (last-exp? seq)             (null? (cdr seq)))
 (define (no-operands? ops)          (null? ops))
+(define (cond-else-clause? clause)  (eq? (car clause) 'else))
 (define (quoted? exp)               (tagged-list? exp 'quote))
 (define (assignment? exp)           (tagged-list? exp 'set!))
 (define (definition? exp)           (tagged-list? exp 'define))
@@ -47,18 +44,11 @@
 (define (true? x)                   (not (eq? x false)))
 (define (false? x)                  (eq? x false))
 
-(define (cond-else-clause? clause) (eq? (car clause) 'else))
-
-(define (make-lambda parameters body)        (cons 'lambda (cons parameters body)))
-(define (make-frame variables values)        (cons variables values))
-(define (make-procedure parameters body env) (list 'procedure parameters body env))
-
 (define (if-alternative exp)
   (if (not (null? (cdddr exp)))
     (cadddr exp)
     'false))
 
-; '('define foo 1)) => 'foo and 1 respectivel here
 (define (definition-variable exp)
   (if (symbol? (cadr exp))
     (cadr exp)
@@ -67,24 +57,17 @@
 (define (definition-value exp)
  (if (symbol? (cadr exp))
     (caddr exp)
-    (make-lambda (cdadr exp) (cddr exp))))
-
-(define (make-if predicate consequent alternative)
-  (list 'if predicate consequent))
+    (cons 'lambda (cons (cdadr exp) (cddr exp)))))
 
 (define (eval-if exp env)
   (if (true? (eval (cadr exp) env))
     (eval (caddr exp) env)
     (eval (if-alternative exp) env)))
 
-(define (make-begin seq) (cons 'begin seq))
-
-(define (begin-actions exp) (cdr exp))
-
 (define (sequence->exp seq)
   (cond ((null? seq) seq)
         ((last-exp? seq) (car seq))
-        (else (make-begin seq))))
+        (else (cons 'begin seq))))
 
 (define (expand-clauses clauses)
   (if (null? clauses)
@@ -94,15 +77,16 @@
         (if (null? rest)
           (sequence->exp (cdr first))
           (error "ELSE clause isn't last -- COND->IF" clauses))
-        (make-if (car first)
-                 (sequence->exp (cdr first))
-                    (expand-clauses rest))))))
+        (list 'if
+              (car first)
+              (sequence->exp (cdr first))
+              (expand-clauses rest))))))
 
 (define (cond->if exp) (expand-clauses (cdr exp)))
 
 (define (extend-environment vars vals base-env)
   (if (= (length vars) (length vals))
-    (cons (make-frame vars vals) base-env)
+    (cons (cons vars vals) base-env)
     (if (< (length vars) (length vals))
       (error "Too many arguments supplied")
       (error "Too few arguments supplied"))))
@@ -114,28 +98,24 @@
             ((eq? var (car vars)) (car vals))
             (else (scan (cdr vars) (cdr vals)))))
     (if (eq? env '())
-      ; XXX: this is a problem! cause it could also be that it's a definition
-      ; we can't know in advance, can we?
-      (if (hash-has-key? *ht* var) ;; global def exists
-        (hash-ref *ht* var)
+      ; XXX: this is a problem! cause it could also be that it's a definition.
+      ; We can't know in advance, can we?
+      (if (hash-has-key? *vars* var) ;; global def exists
+        (hash-ref *vars* var)
         (error "Unbound variable" var))
 
       (let ((frame (car env)))
         (scan (car frame) (cdr frame)))))
   (env-loop env))
 
+; What am I missing out on with my define-variable?
+(define (define-variable! var val env) (hash-set! *vars* var val))
+
 (define (eval-sequence exps env)
   (cond ((last-exp? exps) (eval (car exps) env))
         (else (eval (first exps) env)
               (eval-sequence (cdr exps) env))))
 
-; What's the env supposed to do here?
-; What am I missing out on with define-variable?
-; is var quoted? val lambda? 
-(define (define-variable! var val env)
-    (hash-set! *ht* var val))
-
-; Adds it to the global namespace.
 (define (eval-definition exp env)
   (define-variable! (definition-variable exp)
                     (eval (definition-value exp) env)
@@ -163,7 +143,6 @@
   (map (lambda (proc) (list 'primitive (cadr proc)))
        primitive-procedures))
 
-; this is a good start example! instead of define var and that
 (define (setup-environment)
   (let ((initial-env
           (extend-environment (primitive-procedure-names)
