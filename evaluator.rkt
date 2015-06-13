@@ -2,10 +2,19 @@
 
 (require (only-in racket/base [apply apply-builtin]))
 
+(require scheme/mpair)
+
+(define *ht* (make-hash))
+
+;(hash-set! ht 'foo (lambda (x) (+ 1 x)))
+;(hash-ref ht 'foo)
+;(hash-has-key? ht 'qq)
+
 (define (eval exp env)
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) (lookup-variable-value exp env))
         ((quoted? exp) (text-of-quotation exp))
+        ((definition? exp) (eval-definition exp env)) ; only for defining.
         ((lambda? exp) (make-procedure (lambda-parameters exp)
                                        (lambda-body exp)
                                        env))
@@ -19,6 +28,7 @@
         ((compound-procedure? proc)
          (eval-sequence
            (procedure-body proc)
+           ; here we do it functionally!
            (extend-environment (procedure-parameters proc)
                                args
                                (procedure-environment proc))))
@@ -65,6 +75,18 @@
 (define (make-frame variables values)        (cons variables values))
 (define (make-procedure parameters body env) (list 'procedure parameters body env))
 
+; '('define foo 1)) => 'foo and 1 respectivel here
+(define (definition-variable exp)
+  (if (symbol? (cadr exp))
+    (cadr exp)
+    (caadr exp)))
+
+(define (definition-value exp)
+ (if (symbol? (cadr exp))
+    (caddr exp)
+    (make-lambda (cdadr exp)   ; formal parameters
+                 (cddr exp)))) ; body
+
 (define (extend-environment vars vals base-env)
   (if (= (length vars) (length vals))
     (cons (make-frame vars vals) base-env)
@@ -79,7 +101,12 @@
             ((eq? var (car vars)) (car vals))
             (else (scan (cdr vars) (cdr vals)))))
     (if (eq? env the-empty-environment)
-      (error "Unbound variable" var)
+      ; XXX: this is a problem! cause it could also be that it's a definition
+      ; we can't know in advance, can we?
+      (if (hash-has-key? *ht* var) ;; global def exists
+        (hash-ref *ht* var)
+        (error "Unbound variable" var))
+
       (let ((frame (first-frame env)))
         (scan (frame-variables frame) (frame-values frame)))))
   (env-loop env))
@@ -88,6 +115,18 @@
   (cond ((last-exp? exps) (eval (first-exp exps) env))
         (else (eval (first exps) env)
               (eval-sequence (rest-exps exps) env))))
+
+; What's the env supposed to do here?
+; What am I missing out on with define-variable?
+; is var quoted? val lambda? 
+(define (define-variable! var val env)
+    (hash-set! *ht* var val))
+
+; Adds it to the global namespace.
+(define (eval-definition exp env)
+  (define-variable! (definition-variable exp)
+                    (eval (definition-value exp) env)
+                    env))
 
 (define (list-of-values exps env)
   (if (no-operands? exps)
@@ -111,6 +150,7 @@
   (map (lambda (proc) (list 'primitive (cadr proc)))
        primitive-procedures))
 
+; this is a good start example! instead of define var and that
 (define (setup-environment)
   (let ((initial-env
           (extend-environment (primitive-procedure-names)
