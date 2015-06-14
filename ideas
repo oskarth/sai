@@ -1,3 +1,6 @@
 - clojure set map vector
 - reducers at the bottom?
 - repl everywhere, commit, as an experiment.
+- macro-system
+- call exp s for s-expressions instead (atom or car/cdr!)
+- how do we print?

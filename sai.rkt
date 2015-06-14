@@ -5,17 +5,17 @@
 ; Mapping between vars and values, such as function definitions.
 (define *vars* (make-hash))
 
-(define (eval exp env)
-  (cond ((self-evaluating? exp) exp)
-        ((variable? exp) (lookup-variable-value exp env))
-        ((quoted? exp) (cadr exp))
-        ((definition? exp) (eval-definition exp env))
-        ((if? exp) (eval-if exp env))
-        ((lambda? exp) (list 'procedure (cadr exp) (cddr exp) env))
-        ((begin? exp) (eval-sequence (cdr exp) env))
-        ((cond? exp) (eval (cond->if exp) env))
-        ((application? exp)
-         (apply (eval (car exp) env) (list-of-values (cdr exp) env)))
+(define (eval e env)
+  (cond ((number? e) e)
+        ((string? e) e)
+        ((symbol? e) (lookup-variable-value e env))
+        ((quoted? e) (cadr e))
+        ((definition? e) (eval-definition e env))
+        ((if? e) (eval-if e env))
+        ((lambda? e) (list 'procedure (cadr e) (cddr e) env))
+        ((begin? e) (eval-sequence (cdr e) env))
+        ((cond? e) (eval (cond->if e) env))
+        ((pair? e) (apply (eval (car e) env) (list-of-values (cdr e) env)))
         (else (error "NYI"))))
 
 (define (apply proc args)
@@ -25,13 +25,10 @@
                         (extend-environment (cadr proc) args (cadddr proc))))
         (else (error "Unknown procedure type -- APPLY" proc))))
 
-(define (variable? exp)             (symbol? exp))
-(define (application? exp)          (pair? exp)) ; later in cond-statement
-(define (self-evaluating? exp)      (or (number? exp) (string? exp)))
-(define (tagged-list? exp tag)      (and (pair? exp) (eq? (car exp) tag)))
-(define (last-exp? seq)             (null? (cdr seq)))
-(define (no-operands? ops)          (null? ops))
-(define (cond-else-clause? clause)  (eq? (car clause) 'else))
+(define (tagged-list? exp tag)
+  (and (pair? exp)
+       (eq? (car exp) tag)))
+
 (define (quoted? exp)               (tagged-list? exp 'quote))
 (define (assignment? exp)           (tagged-list? exp 'set!))
 (define (definition? exp)           (tagged-list? exp 'define))
@@ -41,8 +38,6 @@
 (define (cond? exp)                 (tagged-list? exp 'cond))
 (define (primitive-procedure? proc) (tagged-list? proc 'primitive))
 (define (compound-procedure? proc)  (tagged-list? proc 'procedure))
-(define (true? x)                   (not (eq? x false)))
-(define (false? x)                  (eq? x false))
 
 (define (if-alternative exp)
   (if (not (null? (cdddr exp)))
@@ -60,20 +55,20 @@
     (cons 'lambda (cons (cdadr exp) (cddr exp)))))
 
 (define (eval-if exp env)
-  (if (true? (eval (cadr exp) env))
+  (if (not (eq? (eval (cadr exp) env) false))
     (eval (caddr exp) env)
     (eval (if-alternative exp) env)))
 
 (define (sequence->exp seq)
   (cond ((null? seq) seq)
-        ((last-exp? seq) (car seq))
+        ((null? (cdr seq)) (car seq))
         (else (cons 'begin seq))))
 
 (define (expand-clauses clauses)
   (if (null? clauses)
     'false
     (let ((first (car clauses)) (rest (cdr clauses)))
-      (if (cond-else-clause? first)
+      (if (eq? (car first) 'else)
         (if (null? rest)
           (sequence->exp (cdr first))
           (error "ELSE clause isn't last -- COND->IF" clauses))
@@ -122,7 +117,7 @@
                     env))
 
 (define (list-of-values exps env)
-  (if (no-operands? exps)
+  (if (null? exps)
     '()
     (cons (eval (car exps) env)
           (list-of-values (cdr exps) env))))
