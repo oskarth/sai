@@ -107,7 +107,7 @@
 (define (define-variable! var val env) (hash-set! *vars* var val))
 
 (define (eval-sequence exps env)
-  (cond ((last-exp? exps) (eval (car exps) env))
+  (cond ((null? (cdr exps)) (eval (car exps) env))
         (else (eval (first exps) env)
               (eval-sequence (cdr exps) env))))
 
